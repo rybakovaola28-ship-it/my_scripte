@@ -27,7 +27,7 @@ local btnCorner = Instance.new("UICorner"); btnCorner.CornerRadius = UDim.new(1,
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.Size = UDim2.new(0, 0, 0, 0) -- Для анимации
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -150) -- Чуть выше, так как меню стало меньше
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -175) -- Чуть выше центра
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -57,7 +57,7 @@ CloseButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 18
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ (за шапку и фон)
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local dragging = false
@@ -127,11 +127,51 @@ local function clearESP()
     pcall(function() if workspace.StreamingEnabled then workspace.StreamingEnabled = true end end)
 end
 
+-- NOCLIP (Без проваливания через пол)
+local noclipEnabled = false
+local noclipConnection
+
+local function startNoclip()
+    noclipConnection = RunService.Stepped:Connect(function()
+        if not noclipEnabled then return end
+        local character = player.Character
+        if character then
+            for _, v in pairs(character:GetDescendants()) do
+                if v:IsA("BasePart") and v.CanCollide then
+                    -- Сохраняем коллизию у пола (чтобы не падать), отключаем у всего остального
+                    if v.Name ~= "HumanoidRootPart" then
+                        -- Проверка: если деталь ниже персонажа (пол), оставляем коллизию
+                        local rootPart = character:FindFirstChild("HumanoidRootPart")
+                        if rootPart then
+                            -- Если эта деталь (пол) ниже нашего корпуса, не отключаем ей коллизию
+                            if v.Position.Y < rootPart.Position.Y - 2 then
+                                v.CanCollide = true
+                            else
+                                v.CanCollide = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopNoclip()
+    if noclipConnection then noclipConnection:Disconnect() end
+    local character = player.Character
+    if character then
+        for _, v in pairs(character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = true end
+        end
+    end
+end
+
 -- КНОПКИ
 local SpeedButton = Instance.new("TextButton")
 SpeedButton.Parent = MainFrame
 SpeedButton.Size = UDim2.new(0.9, 0, 0, 40)
-SpeedButton.Position = UDim2.new(0.05, 0, 0.15, 0)
+SpeedButton.Position = UDim2.new(0.05, 0, 0.2, 0)
 SpeedButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
 SpeedButton.Text = "Включить бесконечный прыжок"
 SpeedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -142,13 +182,24 @@ local speedCorner = Instance.new("UICorner"); speedCorner.CornerRadius = UDim.ne
 local EspButton = Instance.new("TextButton")
 EspButton.Parent = MainFrame
 EspButton.Size = UDim2.new(0.9, 0, 0, 40)
-EspButton.Position = UDim2.new(0.05, 0, 0.35, 0)
+EspButton.Position = UDim2.new(0.05, 0, 0.4, 0)
 EspButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
 EspButton.Text = "Включить ESP (Подсветку)"
 EspButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 EspButton.Font = Enum.Font.Gotham
 EspButton.TextSize = 15
 local espCorner = Instance.new("UICorner"); espCorner.CornerRadius = UDim.new(0, 5); espCorner.Parent = EspButton
+
+local NoclipButton = Instance.new("TextButton")
+NoclipButton.Parent = MainFrame
+NoclipButton.Size = UDim2.new(0.9, 0, 0, 40)
+NoclipButton.Position = UDim2.new(0.05, 0, 0.6, 0)
+NoclipButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
+NoclipButton.Text = "Включить Noclip (Стены)"
+NoclipButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+NoclipButton.Font = Enum.Font.Gotham
+NoclipButton.TextSize = 15
+local noclipCorner = Instance.new("UICorner"); noclipCorner.CornerRadius = UDim.new(0, 5); noclipCorner.Parent = NoclipButton
 
 -- ОБРАБОТЧИКИ НАЖАТИЙ
 local infiniteJumpEnabled = false
@@ -172,6 +223,19 @@ EspButton.MouseButton1Click:Connect(function()
     if espEnabled then updateESP() else clearESP() end
 end)
 
+NoclipButton.MouseButton1Click:Connect(function()
+    noclipEnabled = not noclipEnabled
+    if noclipEnabled then
+        NoclipButton.Text = "Выключить Noclip (Стены)"
+        NoclipButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        startNoclip()
+    else
+        NoclipButton.Text = "Включить Noclip (Стены)"
+        NoclipButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
+        stopNoclip()
+    end
+end)
+
 -- АНИМАЦИИ ОТКРЫТИЯ/ЗАКРЫТИЯ
 local TweenService = game:GetService("TweenService")
 local menuOpen = false
@@ -181,7 +245,7 @@ local function OpenMenu()
     MainFrame.Visible = true
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 250)}) -- Меню стало короче (250 вместо 520)
+    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 350)}) -- Высота 350 под 3 кнопки
     tween:Play()
 end
 
