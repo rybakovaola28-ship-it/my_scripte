@@ -15,7 +15,7 @@ local ToggleButton = Instance.new("TextButton")
 ToggleButton.Parent = ScreenGui
 ToggleButton.Size = UDim2.new(0, 50, 0, 50)
 ToggleButton.Position = UDim2.new(0, 20, 0, 20)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226) -- Фиолетовый
+ToggleButton.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 ToggleButton.Text = "R"
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.Font = Enum.Font.GothamBold
@@ -28,7 +28,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
 MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 10, 30) -- Темно-фиолетовый фон
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
 MainFrame.ClipsDescendants = true
@@ -37,7 +37,7 @@ local menuCorner = Instance.new("UICorner"); menuCorner.CornerRadius = UDim.new(
 local TopBar = Instance.new("Frame")
 TopBar.Parent = MainFrame
 TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.BackgroundColor3 = Color3.fromRGB(138, 43, 226) -- Фиолетовая шапка
+TopBar.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
 TopBar.BorderSizePixel = 0
 local Title = Instance.new("TextLabel")
 Title.Parent = TopBar
@@ -127,7 +127,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- СКРОЛЛ-ФРЕЙМЫ
+-- СКРОЛЛ-ФРЕЙМЫ (Страницы)
 local Page1 = Instance.new("ScrollingFrame")
 Page1.Parent = MainFrame
 Page1.Size = UDim2.new(0.95, 0, 0.8, 0)
@@ -492,4 +492,7 @@ GodModeButton.MouseButton1Click:Connect(function()
     godModeEnabled = not godModeEnabled
     GodModeButton.Text = godModeEnabled and "Выключить Бессмертие" or "Включить Бессмертие"
     GodModeButton.BackgroundColor3 = godModeEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(70, 40, 100)
-    if godModeEnabled then startGodMode() else stopGodMode() en
+    if godModeEnabled then startGodMode() else stopGodMode() end
+end)
+
+AmmoButton.MouseButton1Click:Connect(fu
