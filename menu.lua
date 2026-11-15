@@ -57,10 +57,9 @@ CloseButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 18
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ МЕНЮ
+-- Логика перетаскивания (Drag)
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-
 local dragging = false
 local dragInput, dragStart, startPos
 
@@ -69,21 +68,16 @@ TopBar.InputBegan:Connect(function(input)
         dragging = true
         dragStart = input.Position
         startPos = MainFrame.Position
-        
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
         end)
     end
 end)
-
 TopBar.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
@@ -129,7 +123,6 @@ end
 local aimbotEnabled = false
 local aimbotSpeed = 0.3
 local aimbotTargetName = ""
-
 local function getClosestPlayer()
     local closestPlayer = nil
     local shortestDistance = math.huge
@@ -148,7 +141,6 @@ local function getClosestPlayer()
     end
     return closestPlayer
 end
-
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = getClosestPlayer()
@@ -161,7 +153,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- FLY (Исправленный)
+-- FLY (Телефонная версия: летит туда, куда смотрит камера)
 local flyEnabled = false
 local flySpeed = 50
 local flyConnection
@@ -177,7 +169,6 @@ local function startFly()
     local bodyVelocity = Instance.new("BodyVelocity")
     bodyVelocity.Parent = rootPart
     bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
 
     flyConnection = RunService.RenderStepped:Connect(function()
         if not flyEnabled or not character or not character.Parent then
@@ -187,30 +178,10 @@ local function startFly()
         end
 
         local camera = workspace.CurrentCamera
-        local moveDir = Vector3.new(0, 0, 0)
+        -- Летим туда, куда смотрит камера
+        bodyVelocity.Velocity = camera.CFrame.LookVector * flySpeed
 
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then
-            moveDir = moveDir + camera.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down) then
-            moveDir = moveDir - camera.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left) then
-            moveDir = moveDir - camera.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right) then
-            moveDir = moveDir + camera.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveDir = moveDir + Vector3.new(0, 1, 0)
-        end
-
-        if moveDir.Magnitude > 0 then
-            bodyVelocity.Velocity = moveDir.Unit * flySpeed
-        else
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        end
-
+        -- Отключаем коллизии (чтобы пролетать сквозь стены)
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") and v.CanCollide then
                 v.CanCollide = false
@@ -231,7 +202,7 @@ local function stopFly()
     if flyConnection then flyConnection:Disconnect() end
 end
 
--- КНОПКИ МЕНЮ
+-- КНОПКИ
 local SpeedButton = Instance.new("TextButton")
 SpeedButton.Parent = MainFrame
 SpeedButton.Size = UDim2.new(0.9, 0, 0, 35)
@@ -386,7 +357,7 @@ FlyButton.MouseButton1Click:Connect(function()
     end
 end)
 
-local flySpeeds = {20, 50, 100, 200, 300}
+local flySpeeds = {30, 50, 80, 120, 200}
 local currentFlySpeedIndex = 2
 FlySpeedSlider.MouseButton1Click:Connect(function()
     currentFlySpeedIndex = currentFlySpeedIndex + 1
@@ -395,7 +366,7 @@ FlySpeedSlider.MouseButton1Click:Connect(function()
     FlySpeedSlider.Text = "Скорость полёта: " .. tostring(flySpeed)
 end)
 
--- АНИМАЦИИ ОТКРЫТИЯ/ЗАКРЫТИЯ
+-- АНИМАЦИИ
 local TweenService = game:GetService("TweenService")
 local function OpenMenu()
     MainFrame.Visible = true
