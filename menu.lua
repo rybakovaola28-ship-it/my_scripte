@@ -26,8 +26,8 @@ local btnCorner = Instance.new("UICorner"); btnCorner.CornerRadius = UDim.new(1,
 -- Главное меню
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 0, 0, 0) -- Для анимации
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -175) -- Чуть выше центра
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -127,7 +127,7 @@ local function clearESP()
     pcall(function() if workspace.StreamingEnabled then workspace.StreamingEnabled = true end end)
 end
 
--- NOCLIP (Без проваливания через пол)
+-- NOCLIP (Улучшенный)
 local noclipEnabled = false
 local noclipConnection
 
@@ -137,18 +137,21 @@ local function startNoclip()
         local character = player.Character
         if character then
             for _, v in pairs(character:GetDescendants()) do
-                if v:IsA("BasePart") and v.CanCollide then
-                    -- Сохраняем коллизию у пола (чтобы не падать), отключаем у всего остального
-                    if v.Name ~= "HumanoidRootPart" then
-                        -- Проверка: если деталь ниже персонажа (пол), оставляем коллизию
-                        local rootPart = character:FindFirstChild("HumanoidRootPart")
-                        if rootPart then
-                            -- Если эта деталь (пол) ниже нашего корпуса, не отключаем ей коллизию
-                            if v.Position.Y < rootPart.Position.Y - 2 then
-                                v.CanCollide = true
-                            else
-                                v.CanCollide = false
-                            end
+                -- Отключаем коллизии для ВСЕХ частей тела
+                if v:IsA("BasePart") then
+                    v.CanCollide = false
+                end
+            end
+            
+            -- Чтобы не проваливаться, если персонаж просто стоит, мы возвращаем коллизию только в том случае, если он падает (Y-координата снижается)
+            local humanoid = character:FindFirstChild("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoid and rootPart then
+                if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+                    -- Если падаем, включаем коллизию для ног, чтобы приземлиться на пол
+                    for _, v in pairs(character:GetChildren()) do
+                        if v:IsA("BasePart") and v.Name == "LeftFoot" or v.Name == "RightFoot" then
+                            v.CanCollide = true
                         end
                     end
                 end
@@ -165,6 +168,37 @@ local function stopNoclip()
             if v:IsA("BasePart") then v.CanCollide = true end
         end
     end
+end
+
+-- INFINITE AMMO (Бесконечные патроны)
+local infiniteAmmoEnabled = false
+local ammoConnection
+
+local function startInfiniteAmmo()
+    ammoConnection = RunService.Heartbeat:Connect(function()
+        if not infiniteAmmoEnabled then return end
+        local character = player.Character
+        if not character then return end
+        
+        -- Ищем инструменты (оружие) в руках
+        for _, tool in pairs(character:GetChildren()) do
+            if tool:IsA("Tool") then
+                -- Пытаемся найти значения патронов (Ammo, Clip, Mag и т.д.)
+                for _, v in pairs(tool:GetDescendants()) do
+                    if v:IsA("IntValue") or v:IsA("NumberValue") then
+                        if string.find(string.lower(v.Name), "ammo") or string.find(string.lower(v.Name), "clip") or string.find(string.lower(v.Name), "mag") then
+                            -- Ставим огромное число, чтобы патроны не кончались
+                            v.Value = 9999 
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopInfiniteAmmo()
+    if ammoConnection then ammoConnection:Disconnect() end
 end
 
 -- КНОПКИ
@@ -201,6 +235,17 @@ NoclipButton.Font = Enum.Font.Gotham
 NoclipButton.TextSize = 15
 local noclipCorner = Instance.new("UICorner"); noclipCorner.CornerRadius = UDim.new(0, 5); noclipCorner.Parent = NoclipButton
 
+local AmmoButton = Instance.new("TextButton")
+AmmoButton.Parent = MainFrame
+AmmoButton.Size = UDim2.new(0.9, 0, 0, 40)
+AmmoButton.Position = UDim2.new(0.05, 0, 0.8, 0)
+AmmoButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
+AmmoButton.Text = "Включить бесконечные патроны"
+AmmoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AmmoButton.Font = Enum.Font.Gotham
+AmmoButton.TextSize = 15
+local ammoCorner = Instance.new("UICorner"); ammoCorner.CornerRadius = UDim.new(0, 5); ammoCorner.Parent = AmmoButton
+
 -- ОБРАБОТЧИКИ НАЖАТИЙ
 local infiniteJumpEnabled = false
 UserInputService.JumpRequest:Connect(function()
@@ -236,6 +281,19 @@ NoclipButton.MouseButton1Click:Connect(function()
     end
 end)
 
+AmmoButton.MouseButton1Click:Connect(function()
+    infiniteAmmoEnabled = not infiniteAmmoEnabled
+    if infiniteAmmoEnabled then
+        AmmoButton.Text = "Выключить бесконечные патроны"
+        AmmoButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        startInfiniteAmmo()
+    else
+        AmmoButton.Text = "Включить бесконечные патроны"
+        AmmoButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
+        stopInfiniteAmmo()
+    end
+end)
+
 -- АНИМАЦИИ ОТКРЫТИЯ/ЗАКРЫТИЯ
 local TweenService = game:GetService("TweenService")
 local menuOpen = false
@@ -245,7 +303,8 @@ local function OpenMenu()
     MainFrame.Visible = true
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 350)}) -- Высота 350 под 3 кнопки
+    -- Высота 450, чтобы все 4 кнопки поместились
+    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 450)}) 
     tween:Play()
 end
 
