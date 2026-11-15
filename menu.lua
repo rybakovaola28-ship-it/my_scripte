@@ -57,27 +57,35 @@ CloseButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 18
 
--- Логика перетаскивания (Drag)
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local dragging = false
 local dragInput, dragStart, startPos
 
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
-    end
-end)
-TopBar.InputChanged:Connect(function(input)
+local function setupDrag(object)
+    object.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if object:IsA("TextButton") or object:IsA("TextBox") then return end
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+end
+
+setupDrag(TopBar)
+setupDrag(MainFrame)
+
+UserInputService.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
+
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
@@ -85,28 +93,44 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ESP
+-- ESP (Обновленный для дальней дистанции)
 local espEnabled = false
 local espObjects = {}
+
 local function createESP(character, color)
     if character and character:FindFirstChild("HumanoidRootPart") then
         if espObjects[character] then espObjects[character]:Destroy() end
+        
         local highlight = Instance.new("Highlight")
         highlight.Parent = character
         highlight.FillColor = color
         highlight.FillTransparency = 0.5
         highlight.OutlineColor = color
         highlight.OutlineTransparency = 0
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        
+        -- Включаем отображение сквозь стены и на дальних дистанциях
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
+        
         espObjects[character] = highlight
     end
 end
+
 local function updateESP()
     if not espEnabled then return end
+    
+    -- Принудительно включаем стриминг (если игра его использует), чтобы видеть далеких игроков
+    pcall(function()
+        if workspace.StreamingEnabled then
+            workspace.StreamingEnabled = false
+        end
+    end)
+
     for _, p in pairs(game.Players:GetPlayers()) do
         if p.Character then
             local color = (p == player) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
             createESP(p.Character, color)
+            
+            -- Отслеживаем респавн (если игрок умрет и появится далеко, ESP снова накинет подсветку)
             p.CharacterAdded:Connect(function(newChar)
                 task.wait(1)
                 if espEnabled then createESP(newChar, color) end
@@ -114,9 +138,19 @@ local function updateESP()
         end
     end
 end
+
 local function clearESP()
-    for char, highlight in pairs(espObjects) do if highlight then highlight:Destroy() end end
+    for char, highlight in pairs(espObjects) do 
+        if highlight then highlight:Destroy() end 
+    end
     espObjects = {}
+    
+    -- Возвращаем стриминг обратно, если выключаем ESP (чтобы игра не лагала)
+    pcall(function()
+        if workspace.StreamingEnabled then
+            workspace.StreamingEnabled = true
+        end
+    end)
 end
 
 -- AIMBOT
@@ -141,6 +175,7 @@ local function getClosestPlayer()
     end
     return closestPlayer
 end
+
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = getClosestPlayer()
@@ -153,7 +188,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- FLY (Телефонная версия: летит туда, куда смотрит камера)
+-- FLY
 local flyEnabled = false
 local flySpeed = 50
 local flyConnection
@@ -169,6 +204,7 @@ local function startFly()
     local bodyVelocity = Instance.new("BodyVelocity")
     bodyVelocity.Parent = rootPart
     bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
 
     flyConnection = RunService.RenderStepped:Connect(function()
         if not flyEnabled or not character or not character.Parent then
@@ -178,14 +214,15 @@ local function startFly()
         end
 
         local camera = workspace.CurrentCamera
-        -- Летим туда, куда смотрит камера
-        bodyVelocity.Velocity = camera.CFrame.LookVector * flySpeed
+        local moveDir = humanoid.MoveDirection 
+        if moveDir.Magnitude > 0 then
+            bodyVelocity.Velocity = moveDir * flySpeed
+        else
+            bodyVelocity.Velocity = camera.CFrame.LookVector * flySpeed
+        end
 
-        -- Отключаем коллизии (чтобы пролетать сквозь стены)
         for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BasePart") and v.CanCollide then
-                v.CanCollide = false
-            end
+            if v:IsA("BasePart") and v.CanCollide then v.CanCollide = false end
         end
     end)
 end
@@ -197,6 +234,12 @@ local function stopFly()
         if humanoid then humanoid.PlatformStand = false end
         for _, v in pairs(character:GetDescendants()) do
             if v:IsA("BasePart") then v.CanCollide = true end
+        end
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local oldVel = rootPart:FindFirstChild("FlyVelocity")
+            if oldVel then oldVel:Destroy() end
+            rootPart.Velocity = Vector3.new(0, 0, 0)
         end
     end
     if flyConnection then flyConnection:Disconnect() end
