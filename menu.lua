@@ -26,11 +26,11 @@ local btnCorner = Instance.new("UICorner"); btnCorner.CornerRadius = UDim.new(1,
 -- Главное меню
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 300, 0, 520)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -260)
+MainFrame.Size = UDim2.new(0, 0, 0, 0) -- Для анимации
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -150) -- Чуть выше, так как меню стало меньше
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
+MainFrame.Visible = true
 MainFrame.ClipsDescendants = true
 local menuCorner = Instance.new("UICorner"); menuCorner.CornerRadius = UDim.new(0, 10); menuCorner.Parent = MainFrame
 
@@ -57,7 +57,7 @@ CloseButton.TextColor3 = Color3.fromRGB(255, 100, 100)
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.TextSize = 18
 
--- ЛОГИКА ПЕРЕТАСКИВАНИЯ
+-- ЛОГИКА ПЕРЕТАСКИВАНИЯ (за шапку и фон)
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local dragging = false
@@ -76,7 +76,6 @@ local function setupDrag(object)
         end
     end)
 end
-
 setupDrag(TopBar)
 setupDrag(MainFrame)
 
@@ -85,7 +84,6 @@ UserInputService.InputChanged:Connect(function(input)
         dragInput = input
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
@@ -93,44 +91,29 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ESP (Обновленный для дальней дистанции)
+-- ESP
 local espEnabled = false
 local espObjects = {}
-
 local function createESP(character, color)
     if character and character:FindFirstChild("HumanoidRootPart") then
         if espObjects[character] then espObjects[character]:Destroy() end
-        
         local highlight = Instance.new("Highlight")
         highlight.Parent = character
         highlight.FillColor = color
         highlight.FillTransparency = 0.5
         highlight.OutlineColor = color
         highlight.OutlineTransparency = 0
-        
-        -- Включаем отображение сквозь стены и на дальних дистанциях
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop 
-        
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         espObjects[character] = highlight
     end
 end
-
 local function updateESP()
     if not espEnabled then return end
-    
-    -- Принудительно включаем стриминг (если игра его использует), чтобы видеть далеких игроков
-    pcall(function()
-        if workspace.StreamingEnabled then
-            workspace.StreamingEnabled = false
-        end
-    end)
-
+    pcall(function() if workspace.StreamingEnabled then workspace.StreamingEnabled = false end end)
     for _, p in pairs(game.Players:GetPlayers()) do
         if p.Character then
             local color = (p == player) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
             createESP(p.Character, color)
-            
-            -- Отслеживаем респавн (если игрок умрет и появится далеко, ESP снова накинет подсветку)
             p.CharacterAdded:Connect(function(newChar)
                 task.wait(1)
                 if espEnabled then createESP(newChar, color) end
@@ -138,213 +121,34 @@ local function updateESP()
         end
     end
 end
-
 local function clearESP()
-    for char, highlight in pairs(espObjects) do 
-        if highlight then highlight:Destroy() end 
-    end
+    for char, highlight in pairs(espObjects) do if highlight then highlight:Destroy() end end
     espObjects = {}
-    
-    -- Возвращаем стриминг обратно, если выключаем ESP (чтобы игра не лагала)
-    pcall(function()
-        if workspace.StreamingEnabled then
-            workspace.StreamingEnabled = true
-        end
-    end)
-end
-
--- AIMBOT
-local aimbotEnabled = false
-local aimbotSpeed = 0.3
-local aimbotTargetName = ""
-local function getClosestPlayer()
-    local closestPlayer = nil
-    local shortestDistance = math.huge
-    local camera = workspace.CurrentCamera
-    for _, p in pairs(game.Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-            if aimbotTargetName ~= "" and string.lower(p.Name) ~= string.lower(aimbotTargetName) then continue end
-            local rootPart = p.Character.HumanoidRootPart
-            local screenPoint, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-            if onScreen then
-                local centerX, centerY = camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2
-                local distance = math.sqrt((screenPoint.X - centerX)^2 + (screenPoint.Y - centerY)^2)
-                if distance < shortestDistance then shortestDistance = distance; closestPlayer = p end
-            end
-        end
-    end
-    return closestPlayer
-end
-
-RunService.RenderStepped:Connect(function()
-    if aimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = getClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            local targetPos = target.Character.HumanoidRootPart.Position
-            local currentCFrame = workspace.CurrentCamera.CFrame
-            local desiredCFrame = CFrame.new(currentCFrame.Position, targetPos)
-            workspace.CurrentCamera.CFrame = currentCFrame:Lerp(desiredCFrame, aimbotSpeed)
-        end
-    end
-end)
-
--- FLY
-local flyEnabled = false
-local flySpeed = 50
-local flyConnection
-
-local function startFly()
-    local character = player.Character
-    if not character then return end
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not rootPart then return end
-
-    humanoid.PlatformStand = true
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Parent = rootPart
-    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-
-    flyConnection = RunService.RenderStepped:Connect(function()
-        if not flyEnabled or not character or not character.Parent then
-            if bodyVelocity then bodyVelocity:Destroy() end
-            if flyConnection then flyConnection:Disconnect() end
-            return
-        end
-
-        local camera = workspace.CurrentCamera
-        local moveDir = humanoid.MoveDirection 
-        if moveDir.Magnitude > 0 then
-            bodyVelocity.Velocity = moveDir * flySpeed
-        else
-            bodyVelocity.Velocity = camera.CFrame.LookVector * flySpeed
-        end
-
-        for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BasePart") and v.CanCollide then v.CanCollide = false end
-        end
-    end)
-end
-
-local function stopFly()
-    local character = player.Character
-    if character then
-        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-        if humanoid then humanoid.PlatformStand = false end
-        for _, v in pairs(character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide = true end
-        end
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            local oldVel = rootPart:FindFirstChild("FlyVelocity")
-            if oldVel then oldVel:Destroy() end
-            rootPart.Velocity = Vector3.new(0, 0, 0)
-        end
-    end
-    if flyConnection then flyConnection:Disconnect() end
+    pcall(function() if workspace.StreamingEnabled then workspace.StreamingEnabled = true end end)
 end
 
 -- КНОПКИ
 local SpeedButton = Instance.new("TextButton")
 SpeedButton.Parent = MainFrame
-SpeedButton.Size = UDim2.new(0.9, 0, 0, 35)
-SpeedButton.Position = UDim2.new(0.05, 0, 0.1, 0)
+SpeedButton.Size = UDim2.new(0.9, 0, 0, 40)
+SpeedButton.Position = UDim2.new(0.05, 0, 0.15, 0)
 SpeedButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
 SpeedButton.Text = "Включить бесконечный прыжок"
 SpeedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 SpeedButton.Font = Enum.Font.Gotham
-SpeedButton.TextSize = 14
+SpeedButton.TextSize = 15
 local speedCorner = Instance.new("UICorner"); speedCorner.CornerRadius = UDim.new(0, 5); speedCorner.Parent = SpeedButton
 
 local EspButton = Instance.new("TextButton")
 EspButton.Parent = MainFrame
-EspButton.Size = UDim2.new(0.9, 0, 0, 35)
-EspButton.Position = UDim2.new(0.05, 0, 0.2, 0)
+EspButton.Size = UDim2.new(0.9, 0, 0, 40)
+EspButton.Position = UDim2.new(0.05, 0, 0.35, 0)
 EspButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
 EspButton.Text = "Включить ESP (Подсветку)"
 EspButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 EspButton.Font = Enum.Font.Gotham
-EspButton.TextSize = 14
+EspButton.TextSize = 15
 local espCorner = Instance.new("UICorner"); espCorner.CornerRadius = UDim.new(0, 5); espCorner.Parent = EspButton
-
-local AimbotButton = Instance.new("TextButton")
-AimbotButton.Parent = MainFrame
-AimbotButton.Size = UDim2.new(0.9, 0, 0, 35)
-AimbotButton.Position = UDim2.new(0.05, 0, 0.3, 0)
-AimbotButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
-AimbotButton.Text = "Включить Aimbot (ПКМ)"
-AimbotButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-AimbotButton.Font = Enum.Font.Gotham
-AimbotButton.TextSize = 14
-local aimCorner = Instance.new("UICorner"); aimCorner.CornerRadius = UDim.new(0, 5); aimCorner.Parent = AimbotButton
-
-local AimSettingsText = Instance.new("TextLabel")
-AimSettingsText.Parent = MainFrame
-AimSettingsText.Size = UDim2.new(0.9, 0, 0, 20)
-AimSettingsText.Position = UDim2.new(0.05, 0, 0.4, 0)
-AimSettingsText.BackgroundTransparency = 1
-AimSettingsText.Text = "Настройки Аимбота:"
-AimSettingsText.TextColor3 = Color3.fromRGB(0, 150, 255)
-AimSettingsText.Font = Enum.Font.GothamBold
-AimSettingsText.TextSize = 14
-AimSettingsText.TextXAlignment = Enum.TextXAlignment.Left
-
-local SpeedSlider = Instance.new("TextButton")
-SpeedSlider.Parent = MainFrame
-SpeedSlider.Size = UDim2.new(0.9, 0, 0, 30)
-SpeedSlider.Position = UDim2.new(0.05, 0, 0.46, 0)
-SpeedSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-SpeedSlider.Text = "Скорость наведения: 0.3"
-SpeedSlider.TextColor3 = Color3.fromRGB(200, 200, 200)
-SpeedSlider.Font = Enum.Font.Gotham
-SpeedSlider.TextSize = 13
-local sliderCorner = Instance.new("UICorner"); sliderCorner.CornerRadius = UDim.new(0, 5); sliderCorner.Parent = SpeedSlider
-
-local TargetBox = Instance.new("TextBox")
-TargetBox.Parent = MainFrame
-TargetBox.Size = UDim2.new(0.9, 0, 0, 30)
-TargetBox.Position = UDim2.new(0.05, 0, 0.54, 0)
-TargetBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-TargetBox.PlaceholderText = "Имя цели (пусто = все)"
-TargetBox.Text = ""
-TargetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-TargetBox.Font = Enum.Font.Gotham
-TargetBox.TextSize = 13
-local boxCorner = Instance.new("UICorner"); boxCorner.CornerRadius = UDim.new(0, 5); boxCorner.Parent = TargetBox
-
-local FlyButton = Instance.new("TextButton")
-FlyButton.Parent = MainFrame
-FlyButton.Size = UDim2.new(0.9, 0, 0, 35)
-FlyButton.Position = UDim2.new(0.05, 0, 0.64, 0)
-FlyButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
-FlyButton.Text = "Включить Fly (Полёт)"
-FlyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-FlyButton.Font = Enum.Font.Gotham
-FlyButton.TextSize = 14
-local flyCorner = Instance.new("UICorner"); flyCorner.CornerRadius = UDim.new(0, 5); flyCorner.Parent = FlyButton
-
-local FlySettingsText = Instance.new("TextLabel")
-FlySettingsText.Parent = MainFrame
-FlySettingsText.Size = UDim2.new(0.9, 0, 0, 20)
-FlySettingsText.Position = UDim2.new(0.05, 0, 0.74, 0)
-FlySettingsText.BackgroundTransparency = 1
-FlySettingsText.Text = "Настройки Полёта:"
-FlySettingsText.TextColor3 = Color3.fromRGB(0, 150, 255)
-FlySettingsText.Font = Enum.Font.GothamBold
-FlySettingsText.TextSize = 14
-FlySettingsText.TextXAlignment = Enum.TextXAlignment.Left
-
-local FlySpeedSlider = Instance.new("TextButton")
-FlySpeedSlider.Parent = MainFrame
-FlySpeedSlider.Size = UDim2.new(0.9, 0, 0, 30)
-FlySpeedSlider.Position = UDim2.new(0.05, 0, 0.8, 0)
-FlySpeedSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-FlySpeedSlider.Text = "Скорость полёта: 50"
-FlySpeedSlider.TextColor3 = Color3.fromRGB(200, 200, 200)
-FlySpeedSlider.Font = Enum.Font.Gotham
-FlySpeedSlider.TextSize = 13
-local flySliderCorner = Instance.new("UICorner"); flySliderCorner.CornerRadius = UDim.new(0, 5); flySliderCorner.Parent = FlySpeedSlider
 
 -- ОБРАБОТЧИКИ НАЖАТИЙ
 local infiniteJumpEnabled = false
@@ -368,57 +172,21 @@ EspButton.MouseButton1Click:Connect(function()
     if espEnabled then updateESP() else clearESP() end
 end)
 
-AimbotButton.MouseButton1Click:Connect(function()
-    aimbotEnabled = not aimbotEnabled
-    AimbotButton.Text = aimbotEnabled and "Aimbot: ВКЛ (Зажми ПКМ)" or "Включить Aimbot (ПКМ)"
-    AimbotButton.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(0, 80, 180)
-end)
-
-local speeds = {0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0}
-local currentSpeedIndex = 3
-SpeedSlider.MouseButton1Click:Connect(function()
-    currentSpeedIndex = currentSpeedIndex + 1
-    if currentSpeedIndex > #speeds then currentSpeedIndex = 1 end
-    aimbotSpeed = speeds[currentSpeedIndex]
-    SpeedSlider.Text = "Скорость наведения: " .. tostring(aimbotSpeed)
-end)
-
-TargetBox.FocusLost:Connect(function()
-    aimbotTargetName = TargetBox.Text
-end)
-
-FlyButton.MouseButton1Click:Connect(function()
-    flyEnabled = not flyEnabled
-    if flyEnabled then
-        FlyButton.Text = "Выключить Fly (Полёт)"
-        FlyButton.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-        startFly()
-    else
-        FlyButton.Text = "Включить Fly (Полёт)"
-        FlyButton.BackgroundColor3 = Color3.fromRGB(0, 80, 180)
-        stopFly()
-    end
-end)
-
-local flySpeeds = {30, 50, 80, 120, 200}
-local currentFlySpeedIndex = 2
-FlySpeedSlider.MouseButton1Click:Connect(function()
-    currentFlySpeedIndex = currentFlySpeedIndex + 1
-    if currentFlySpeedIndex > #flySpeeds then currentFlySpeedIndex = 1 end
-    flySpeed = flySpeeds[currentFlySpeedIndex]
-    FlySpeedSlider.Text = "Скорость полёта: " .. tostring(flySpeed)
-end)
-
--- АНИМАЦИИ
+-- АНИМАЦИИ ОТКРЫТИЯ/ЗАКРЫТИЯ
 local TweenService = game:GetService("TweenService")
+local menuOpen = false
+
 local function OpenMenu()
+    menuOpen = true
     MainFrame.Visible = true
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 520)})
+    local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 300, 0, 250)}) -- Меню стало короче (250 вместо 520)
     tween:Play()
 end
+
 local function CloseMenu()
+    menuOpen = false
     local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
     local tween = TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 0, 0, 0)})
     tween:Play()
@@ -426,5 +194,11 @@ local function CloseMenu()
         MainFrame.Visible = false
     end)
 end
-ToggleButton.MouseButton1Click:Connect(OpenMenu)
+
+ToggleButton.MouseButton1Click:Connect(function()
+    if menuOpen then CloseMenu() else OpenMenu() end
+end)
 CloseButton.MouseButton1Click:Connect(CloseMenu)
+
+-- АВТОЗАПУСК
+OpenMenu()
